@@ -1,0 +1,8 @@
+basePath: /
+info:
+  contact: {}
+  description: Esta é uma API do Frete Rápido em Go
+  title: Frete Rápido API
+  version: "1.0"
+paths: {}
+swagger: "2.0"
