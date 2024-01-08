@@ -3,14 +3,16 @@ package routers
 import (
 	"github.com/go-chi/chi/v5"
 	"github.com/pedrohscramos/teste-frete-rapido/database/mysql"
-	services "github.com/pedrohscramos/teste-frete-rapido/services/quote"
+	"github.com/pedrohscramos/teste-frete-rapido/handlers/quotes"
+	services "github.com/pedrohscramos/teste-frete-rapido/services/quotes"
 )
 
 func QuotesRoutes(router *chi.Mux, db *mysql.DB) {
 	// Quotes
 	Service := services.NewGormRepository(db)
-	quoteHandler := quote.NewQuoteHandler(Service)
+	quoteHandler := quotes.NewQuoteHandler(Service)
 
-	router.Post("/quotes", quoteHandler.InsertQuote)
+	router.Post("/quote", quoteHandler.InsertQuote)
+	router.Get("/metrics", quoteHandler.GetLastQuotes)
 
 }

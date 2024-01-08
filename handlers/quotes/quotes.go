@@ -1,4 +1,4 @@
-package concursos
+package quotes
 
 import (
 	"bytes"
@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"strconv"
 
-	services "github.com/pedrohscramos/teste-frete-rapido/services/quote"
+	"github.com/pedrohscramos/teste-frete-rapido/models"
+	services "github.com/pedrohscramos/teste-frete-rapido/services/quotes"
+	"github.com/pedrohscramos/teste-frete-rapido/utils"
 )
 
 type QuoteInput struct {
@@ -52,6 +54,22 @@ type QuoteResponse struct {
 		Deadline string  `json:"deadline"`
 		Price    float64 `json:"price"`
 	} `json:"carrier"`
+}
+
+type Dispatch struct {
+	Dispatchers []struct {
+		Offers []struct {
+			Carrier struct {
+				Name string `json:"name"`
+			} `json:"carrier"`
+			Service      string `json:"service"`
+			DeliveryTime struct {
+				EstimatedDate string `json:"estimated_date"`
+			} `json:"delivery_time"`
+
+			CostPrice float64 `json:"cost_price"`
+		} `json:"offers"`
+	} `json:"dispatchers"`
 }
 
 const (
@@ -108,25 +126,94 @@ func (handler *QuoteHandler) InsertQuote(w http.ResponseWriter, r *http.Request)
 		panic(err)
 	}
 
-	fmt.Println("response Status:", resp.Status)
-	fmt.Println("response Headers:", resp.Header)
-	bdd, _ := io.ReadAll(resp.Body)
-	fmt.Println("response Body:", string(bdd))
+	bodyResponse, _ := io.ReadAll(resp.Body)
+	keyVal := make(map[string]interface{})
+	json.Unmarshal(bodyResponse, &keyVal)
 
-	defer response.Body.Close()
+	_, err = utils.HttpRequest(keyVal)
+	utils.Error(err, nil)
 
-	responseBody, err := io.ReadAll(resp.Body)
+	/** COMECO JSON SIMPLIFICADO*/
+
+	// Decodificar o JSON para a estrutura Dispatch
+	var dispatch Dispatch
+	err = json.Unmarshal([]byte(bodyResponse), &dispatch)
 	if err != nil {
-		http.Error(w, "Erro ao ler a resposta da API da Frete Rápido", http.StatusInternalServerError)
+		fmt.Println("Erro ao decodificar o JSON:", err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(responseBody)
+	// Criar uma nova estrutura contendo apenas os campos desejados
+	var simplifiedDispatch struct {
+		Offers []struct {
+			Carrier struct {
+				Name string `json:"name"`
+			} `json:"carrier"`
+			Service      string `json:"service"`
+			DeliveryTime struct {
+				EstimatedDate string `json:"estimated_date"`
+			} `json:"delivery_time"`
+
+			CostPrice float64 `json:"cost_price"`
+		} `json:"offers"`
+	}
+
+	// Preencher a nova estrutura com os dados necessários
+	simplifiedDispatch.Offers = make([]struct {
+		Carrier struct {
+			Name string `json:"name"`
+		} `json:"carrier"`
+		Service      string `json:"service"`
+		DeliveryTime struct {
+			EstimatedDate string `json:"estimated_date"`
+		} `json:"delivery_time"`
+
+		CostPrice float64 `json:"cost_price"`
+	}, len(dispatch.Dispatchers[0].Offers))
+
+	for i, offer := range dispatch.Dispatchers[0].Offers {
+		simplifiedDispatch.Offers[i].Carrier = offer.Carrier
+		simplifiedDispatch.Offers[i].Service = offer.Service
+		simplifiedDispatch.Offers[i].DeliveryTime = offer.DeliveryTime
+		simplifiedDispatch.Offers[i].CostPrice = offer.CostPrice
+
+		newQuote := &models.Quote{
+			Name:     offer.Carrier.Name,
+			Service:  offer.Service,
+			Deadline: offer.DeliveryTime.EstimatedDate,
+			Price:    int(offer.CostPrice),
+		}
+
+		_, err = handler.service.InsertQuote(newQuote)
+		utils.Error(err, w)
+	}
+
+	// Codificar a nova estrutura para JSON
+	/*simplifiedJson, err := json.Marshal(simplifiedDispatch)
+	if err != nil {
+		fmt.Println("Erro ao codificar para JSON:", err)
+		return
+	}*/
+	/** FIM JSON SIMPLIFICADO*/
+	//fmt.Println(string(simplifiedJson))
+	//fmt.Println(string(simplifiedDispatch.Offers[0].Carrier.Name))
+	/*
+
+		newQuote := &models.Quote{
+			Name:     simplifiedDispatch["Carrier"]["name"].(string),
+			Service:  data["service"].(string),
+			Deadline: data["deadline"].(string),
+			Price:    data["price"].(int),
+		}
+
+		_, err = handler.service.InsertQuote(newQuote)
+		utils.Error(err, w)
+	*/
+	defer response.Body.Close()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(responseBody)
+	//json.NewEncoder(w).Encode(newQuote)
 }
 
 func complementarDadosFreteRapido(input QuoteInput) QuoteRequest {
@@ -189,4 +276,14 @@ func complementarDadosFreteRapido(input QuoteInput) QuoteRequest {
 	request.SimulationType = []interface{}{0}
 
 	return request
+}
+
+func (handler *QuoteHandler) GetLastQuotes(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.ParseUint(q.Get("last_quotes"), 10, 64)
+
+	quote, err := handler.service.GetLastQuotes(limit)
+	utils.Error(err, w)
+
+	utils.HttpResponse(quote, http.StatusOK, w)
 }
