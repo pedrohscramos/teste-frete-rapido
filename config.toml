@@ -1,11 +1,11 @@
 [api]
 host = "0.0.0.0"
-port = "3000"
-documentation = "http://localhost:3000/swagger/index.html"
+port = "8080"
+documentation = "http://localhost:8080/swagger/index.html"
 
 [mysql]
 host = "localhost"
-port = "3306"
-user = "root"
-password = "p34c3m4k3r"
+port = "3307"
+user = "freterapido"
+password = "root"
 database = "frete_rapido"
